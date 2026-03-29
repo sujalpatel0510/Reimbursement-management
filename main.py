@@ -222,7 +222,18 @@ def dashboard():
                                
     else: # Employee
         my_expenses = Expense.query.filter_by(user_id=user.id).all()
-        return render_template('dashboard_employee.html', user=user, expenses=my_expenses)
+        
+        # Calculate Employee statistics directly in Python
+        pending_count = sum(1 for e in my_expenses if e.status == 'Pending')
+        approved_count = sum(1 for e in my_expenses if e.status == 'Approved')
+        rejected_count = sum(1 for e in my_expenses if e.status == 'Rejected')
+        
+        return render_template('dashboard_employee.html', 
+                               user=user, 
+                               expenses=my_expenses,
+                               pending_count=pending_count,
+                               approved_count=approved_count,
+                               rejected_count=rejected_count)
 
 @app.route('/manage_users', methods=['GET', 'POST'])
 def manage_users():
@@ -482,9 +493,24 @@ def my_expenses():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # Corrected to use user_id to match your database model
-    expenses = Expense.query.filter_by(user_id=session.get('user_id')).all()
-    return render_template('dashboard_employee.html', expenses=expenses)
+    # 1. Fetch the user so the template can show their Manager
+    user = User.query.get(session.get('user_id'))
+    
+    # 2. Fetch all of their expenses
+    my_expenses = Expense.query.filter_by(user_id=user.id).all()
+    
+    # 3. Calculate the statistics for the cards
+    pending_count = sum(1 for e in my_expenses if e.status == 'Pending')
+    approved_count = sum(1 for e in my_expenses if e.status == 'Approved')
+    rejected_count = sum(1 for e in my_expenses if e.status == 'Rejected')
+    
+    # 4. Send ALL the data to the page
+    return render_template('dashboard_employee.html', 
+                           user=user, 
+                           expenses=my_expenses,
+                           pending_count=pending_count,
+                           approved_count=approved_count,
+                           rejected_count=rejected_count)
 
 @app.route('/approval_rules')
 def approval_rules():

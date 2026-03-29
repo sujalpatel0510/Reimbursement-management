@@ -12,6 +12,15 @@
 
 {% block content %}
 
+<div style="margin-bottom: 24px; display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+    <svg fill="none" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" style="color:var(--muted);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    <span style="font-size: 13px; color: var(--muted);">Reports to:</span>
+    <span style="font-size: 14px; font-weight: 600;">{{ user.manager.name if user.manager else 'No manager assigned yet' }}</span>
+    {% if user.is_manager_approver and user.manager %}
+    <span class="badge approved" style="margin-left:auto;">Direct Approver</span>
+    {% endif %}
+</div>
+
 <div class="stats-grid">
     <div class="stat-card blue">
         <div class="stat-icon">
@@ -24,21 +33,21 @@
         <div class="stat-icon">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </div>
-        <div class="stat-value">{{ expenses|selectattr('status','eq','Pending')|list|length }}</div>
+        <div class="stat-value">{{ pending_count }}</div>
         <div class="stat-label">Awaiting Approval</div>
     </div>
     <div class="stat-card green">
         <div class="stat-icon">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </div>
-        <div class="stat-value">{{ expenses|selectattr('status','eq','Approved')|list|length }}</div>
+        <div class="stat-value">{{ approved_count }}</div>
         <div class="stat-label">Approved</div>
     </div>
     <div class="stat-card red">
         <div class="stat-icon">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </div>
-        <div class="stat-value">{{ expenses|selectattr('status','eq','Rejected')|list|length }}</div>
+        <div class="stat-value">{{ rejected_count }}</div>
         <div class="stat-label">Rejected</div>
     </div>
 </div>
