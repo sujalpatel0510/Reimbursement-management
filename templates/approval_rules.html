@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}Approval Rules — ExpenseFlow{% endblock %}
+{% block page_title %}Approval Rules{% endblock %}
+{% block breadcrumb %}Configure Approvals{% endblock %}
+
+{% block topbar_actions %}
+<button onclick="document.getElementById('addRuleModal').style.display='flex'" class="btn btn-primary btn-sm">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    New Rule
+</button>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+.modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 200;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px; width:100%; max-width:560px; animation:fadeUp 0.25s ease; position:relative; max-height:90vh; overflow-y:auto; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.modal-close { position:absolute; top:16px; right:16px; background:none; border:none; color:var(--muted); cursor:pointer; padding:4px; border-radius:6px; transition:color 0.15s; }
+.modal-close:hover { color:var(--text); }
+.modal-title { font-family:'Syne',sans-serif; font-weight:700; font-size:18px; margin-bottom:20px; }
+
+.rule-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+}
+.rule-card:hover { border-color: rgba(240,165,0,0.3); }
+.rule-card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
+.rule-name { font-family:'Syne',sans-serif; font-weight:600; font-size:16px; }
+.rule-target { font-size:12px; color:var(--muted); margin-top:2px; }
+
+.approver-chain { display:flex; flex-direction:column; gap:8px; }
+.approver-row { display:flex; align-items:center; gap:10px; font-size:13px; }
+.chain-connector { width:2px; height:12px; background:var(--border); margin-left:11px; }
+
+.rule-type-pills { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.rule-pill {
+    background: rgba(59,130,246,0.12);
+    color: var(--blue);
+    border: 1px solid rgba(59,130,246,0.2);
+    padding: 3px 10px; border-radius: 100px; font-size:11px; font-weight:600;
+}
+.rule-pill.percentage { background:rgba(240,165,0,0.12); color:var(--accent); border-color:rgba(240,165,0,0.25); }
+.rule-pill.specific    { background:rgba(34,197,94,0.12); color:var(--green);  border-color:rgba(34,197,94,0.25); }
+
+/* Approver builder */
+.approver-builder { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.approver-builder-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--border); background:var(--surface2); }
+.approver-builder-row:last-child { border-bottom:none; }
+.drag-handle { color:var(--muted); cursor:grab; }
+.row-num { width:22px;height:22px;border-radius:50%;background:rgba(240,165,0,0.15);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0; }
+.remove-btn { background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;border-radius:4px;transition:color 0.15s;margin-left:auto; }
+.remove-btn:hover { color:var(--red); }
+
+.condition-box { background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.15); border-radius:var(--radius); padding:14px; margin-top:14px; }
+.condition-title { font-size:11px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if rules is defined and rules %}
+{% for rule in rules %}
+<div class="rule-card">
+    <div class="rule-card-header">
+        <div>
+            <div class="rule-name">{{ rule.name }}</div>
+            <div class="rule-target">Applied to: {{ rule.target_user.name if rule.target_user else 'All users' }}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+            <a href="{{ url_for('edit_rule', rule_id=rule.id) }}" class="btn btn-outline btn-sm">Edit</a>
+            <a href="{{ url_for('delete_rule', rule_id=rule.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete this rule?')">Delete</a>
+        </div>
+    </div>
+
+    <div class="approver-chain">
+        {% for step in rule.steps|sort(attribute='step_order') %}
+        <div class="approver-row">
+            <div class="row-num">{{ step.step_order }}</div>
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">{{ step.approver.name[0].upper() }}</div>
+            <span style="font-weight:500;">{{ step.approver.name }}</span>
+            <span class="text-muted text-sm">{{ step.approver.role }}</span>
+        </div>
+        {% if not loop.last %}<div class="chain-connector"></div>{% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="rule-type-pills">
+        {% if rule.percentage_threshold %}
+        <span class="rule-pill percentage">{{ rule.percentage_threshold }}% approval required</span>
+        {% endif %}
+        {% if rule.specific_approver_id %}
+        <span class="rule-pill specific">{{ rule.specific_approver.name }} → auto-approve</span>
+        {% endif %}
+        {% if rule.is_sequential %}
+        <span class="rule-pill">Sequential</span>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+
+<!-- Empty state with example card -->
+<div style="margin-bottom:20px;padding:14px 18px;background:rgba(240,165,0,0.08);border:1px solid rgba(240,165,0,0.2);border-radius:var(--radius);font-size:13px;display:flex;gap:10px;align-items:flex-start;">
+    <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" style="flex-shrink:0;margin-top:1px;color:var(--accent);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <div>No approval rules yet. Rules define who approves expenses and in what order. Click <strong>New Rule</strong> to get started.</div>
+</div>
+
+<div class="card">
+    <div class="empty-state">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        <p>No approval rules configured yet</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- New Rule Modal -->
+<div class="modal-overlay" id="addRuleModal" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+        <button class="modal-close" onclick="document.getElementById('addRuleModal').style.display='none'">
+            <svg fill="none" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="modal-title">Create approval rule</div>
+
+        <form method="POST" action="{{ url_for('create_rule') }}">
+            <div class="form-group">
+                <label class="form-label">Rule name</label>
+                <input type="text" name="rule_name" class="form-control" placeholder="e.g. Miscellaneous expenses" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Apply to user (optional)</label>
+                <select name="target_user_id" class="form-control">
+                    <option value="">All employees</option>
+                    {% for u in users if u.role == 'Employee' %}
+                    <option value="{{ u.id }}">{{ u.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Manager is first approver?</label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="manager_first" value="1" checked style="width:16px;height:16px;accent-color:var(--accent);">
+                    <span class="text-sm">Yes, manager approves before other approvers</span>
+                </label>
+            </div>
+
+            <!-- Approver steps -->
+            <div class="form-group">
+                <label class="form-label">Approval sequence</label>
+                <div class="approver-builder" id="approverBuilder">
+                    <div class="approver-builder-row" data-step="1">
+                        <span class="drag-handle">⠿</span>
+                        <span class="row-num">1</span>
+                        <select name="approver_ids[]" class="form-control" style="flex:1;" required>
+                            <option value="" disabled selected>Select approver…</option>
+                            {% for u in users if u.role in ['Manager','Admin'] %}
+                            <option value="{{ u.id }}">{{ u.name }} — {{ u.role }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="remove-btn" onclick="removeStep(this)">
+                            <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" onclick="addStep()" class="btn btn-outline btn-sm" style="margin-top:8px;">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Add step
+                </button>
+            </div>
+
+            <!-- Conditional rules -->
+            <div class="condition-box">
+                <div class="condition-title">Conditional approval (optional)</div>
+
+                <div class="form-group" style="margin-bottom:14px;">
+                    <label class="form-label" style="font-size:11px;">Percentage rule</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" name="percentage_threshold" class="form-control" placeholder="e.g. 60" min="1" max="100" style="width:90px;">
+                        <span class="text-muted text-sm">% of approvers must approve</span>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label" style="font-size:11px;">Auto-approve if specific approver approves</label>
+                    <select name="specific_approver_id" class="form-control">
+                        <option value="">None</option>
+                        {% for u in users if u.role in ['Manager','Admin'] %}
+                        <option value="{{ u.id }}">{{ u.name }} — {{ u.role }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:14px;">
+                <label class="form-label">Sequential approvals?</label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="is_sequential" value="1" style="width:16px;height:16px;accent-color:var(--accent);">
+                    <span class="text-sm">Next approver is notified only after current approves</span>
+                </label>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;">Save rule</button>
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('addRuleModal').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let stepCount = 1;
+const managers = [
+    {% for u in users if u.role in ['Manager','Admin'] %}
+    { id: {{ u.id }}, name: "{{ u.name }}", role: "{{ u.role }}" },
+    {% endfor %}
+];
+
+function addStep() {
+    stepCount++;
+    const builder = document.getElementById('approverBuilder');
+    const row = document.createElement('div');
+    row.className = 'approver-builder-row';
+    row.dataset.step = stepCount;
+    row.innerHTML = `
+        <span class="drag-handle">⠿</span>
+        <span class="row-num">${stepCount}</span>
+        <select name="approver_ids[]" class="form-control" style="flex:1;" required>
+            <option value="" disabled selected>Select approver…</option>
+            ${managers.map(m => `<option value="${m.id}">${m.name} — ${m.role}</option>`).join('')}
+        </select>
+        <button type="button" class="remove-btn" onclick="removeStep(this)">
+            <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+    `;
+    builder.appendChild(row);
+    renumberSteps();
+}
+
+function removeStep(btn) {
+    const rows = document.querySelectorAll('.approver-builder-row');
+    if (rows.length <= 1) return;
+    btn.closest('.approver-builder-row').remove();
+    renumberSteps();
+}
+
+function renumberSteps() {
+    document.querySelectorAll('.approver-builder-row').forEach((row, i) => {
+        row.querySelector('.row-num').textContent = i + 1;
+    });
+}
+</script>
+{% endblock %}
