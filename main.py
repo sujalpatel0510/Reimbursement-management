@@ -40,6 +40,37 @@ class User(db.Model):
     expenses = db.relationship('Expense', backref='employee', lazy=True)
 
 
+def get_currency_for_country(country_name):
+    try:
+        url = "https://restcountries.com/v3.1/all?fields=name,currencies"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            for country_data in data:
+                if country_data.get('name', {}).get('common', '').lower() == country_name.lower():
+                    currencies = country_data.get('currencies', {})
+                    if currencies:
+                        return list(currencies.keys())[0] 
+    except Exception as e:
+        print(f"Error fetching currency: {e}")
+    return "USD" 
+
+def convert_currency(amount, from_currency, to_currency):
+    if from_currency == to_currency:
+        return amount
+    try:
+        url = f"https://api.exchangerate-api.com/v4/latest/{from_currency}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            rates = response.json().get('rates', {})
+            rate = rates.get(to_currency, 1)
+            return round(amount * rate, 2)
+    except Exception as e:
+        print(f"Error converting currency: {e}")
+    return amount
+
+
+# --- 4. Application Routes (Template Rendering & Form Handling) ---
 
 @app.route('/')
 def index():
@@ -71,6 +102,20 @@ def logout():
     return redirect(url_for('login'))
 
 
+
+# (Optional) Keep OCR as an API endpoint so your frontend JS can upload images async
+@app.route('/api/ocr', methods=['POST'])
+def api_ocr():
+    if 'receipt' not in request.files:
+        return jsonify({"error": "No receipt file"}), 400
+    try:
+        img = Image.open(request.files['receipt'])
+        text = pytesseract.image_to_string(img)
+        return jsonify({"raw_text": text, "status": "success"})
+    except Exception as e:
+        return jsonify({"error": str(e), "status": "failed"}), 500
+
+# --- 5. Run Application ---
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
