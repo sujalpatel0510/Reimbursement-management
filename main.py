@@ -179,6 +179,96 @@ def dashboard():
         my_expenses = Expense.query.filter_by(user_id=user.id).all()
         return render_template('dashboard_employee.html', user=user, expenses=my_expenses)
 
+@app.route('/manage_users', methods=['GET', 'POST'])
+def manage_users():
+    """Admin page to view and manage users"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+        
+    user = User.query.get(session['user_id'])
+    
+    if user.role != 'Admin':
+        flash('Only Admins can access this page.', 'error')
+        return redirect(url_for('dashboard'))
+        
+    users = User.query.filter_by(company_id=user.company_id).all()
+    return render_template('manage_users.html', user=user, users=users)
+
+@app.route('/create_user', methods=['POST'])
+def create_user():
+    # 1. Security check: Only admins can create users
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+
+    # 2. Get data from the form
+    name = request.form.get('name')
+    email = request.form.get('email')
+    password = request.form.get('password')  # Capture the password from the form
+    role = request.form.get('role', 'Employee')
+    manager_id = request.form.get('manager_id')
+    
+    # The toggle input comes in as a string 'true' or 'false'
+    is_approver_str = request.form.get('is_manager_approver', 'false')
+    is_manager_approver = (is_approver_str.lower() == 'true')
+
+    # 3. Hash the password provided in the form
+    if not password:
+        flash('Password is required.', 'error')
+        return redirect(url_for('manage_users'))
+        
+    hashed_password = generate_password_hash(password)
+
+    # 4. Save the new user to the database
+    try:
+        new_user = User(
+            company_id=session.get('company_id'),
+            name=name,
+            email=email,
+            password_hash=hashed_password, # Use the hashed form password
+            role=role,
+            manager_id=int(manager_id) if manager_id else None,
+            is_manager_approver=is_manager_approver
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        flash(f'User {name} added successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        print(f"Database Error: {e}") # Helpful for debugging in your terminal
+        flash('Error adding user. Email might already exist.', 'error')
+
+    return redirect(url_for('manage_users'))
+
+@app.route('/delete_user/<int:user_id>', methods=['GET', 'POST'])
+def delete_user(user_id):
+    """Admin route to delete a user"""
+    # 1. Security check: Only admins can delete users
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+
+    # 2. Find the user in the database
+    user_to_delete = User.query.get_or_404(user_id)
+    
+    # 3. Prevent the admin from deleting themselves
+    if user_to_delete.id == session['user_id']:
+        flash('You cannot delete your own account.', 'error')
+        return redirect(url_for('manage_users'))
+
+    # 4. Delete the user
+    try:
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        flash(f'User {user_to_delete.name} deleted successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error deleting user. They may have expenses tied to their account.', 'error')
+
+    return redirect(url_for('manage_users'))
+
+
+
 
 if __name__ == '__main__':
     with app.app_context():
