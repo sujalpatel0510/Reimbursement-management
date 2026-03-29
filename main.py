@@ -65,6 +65,30 @@ class ApprovalStep(db.Model):
     
     approver = db.relationship('User', foreign_keys=[approver_id])
 
+class ApprovalRule(db.Model):
+    __tablename__ = 'approval_rules'
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    manager_first = db.Column(db.Boolean, default=True)
+    percentage_threshold = db.Column(db.Integer, nullable=True)
+    specific_approver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    is_sequential = db.Column(db.Boolean, default=True)
+
+    steps = db.relationship('ApprovalRuleStep', backref='rule', lazy=True, cascade="all, delete-orphan")
+    target_user = db.relationship('User', foreign_keys=[target_user_id])
+    specific_approver = db.relationship('User', foreign_keys=[specific_approver_id])
+
+class ApprovalRuleStep(db.Model):
+    __tablename__ = 'approval_rule_steps'
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey('approval_rules.id'), nullable=False)
+    approver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    step_order = db.Column(db.Integer, nullable=False)
+    
+    approver = db.relationship('User', foreign_keys=[approver_id])
+
 # --- 3. Utility Functions ---
 def get_currency_for_country(country_name):
     try:
@@ -443,15 +467,74 @@ def my_expenses():
 
 @app.route('/approval_rules')
 def approval_rules():
-    if 'user_id' not in session or session.get('role') != 'Admin':
-        flash('Unauthorized access.', 'error')
-        return redirect(url_for('dashboard'))
+    # 1. Check if the user is logged in at all
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     
-    # We need the users list to populate the 'Add Rule' modal in the HTML
-    users = User.query.filter_by(company_id=session.get('company_id')).all()
-    # You'll eventually need a Rule model, but for now, this loads the page
-    return render_template('approval_rules.html', users=users)
+    # 2. Fetch the rules for everyone to see
+    company_rules = ApprovalRule.query.filter_by(company_id=session.get('company_id')).all()
+    
+    # 3. Only Admins need the list of users (for the 'New Rule' form)
+    users = []
+    if session.get('role') == 'Admin':
+        users = User.query.filter_by(company_id=session.get('company_id')).all()
+    
+    return render_template('approval_rules.html', users=users, rules=company_rules)
 
+@app.route('/create_rule', methods=['POST'])
+def create_rule():
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        return redirect(url_for('dashboard'))
+        
+    name = request.form.get('rule_name')
+    target_user_id = request.form.get('target_user_id') or None
+    manager_first = request.form.get('manager_first') == '1'
+    percentage_threshold = request.form.get('percentage_threshold') or None
+    specific_approver_id = request.form.get('specific_approver_id') or None
+    is_sequential = request.form.get('is_sequential') == '1'
+    approver_ids = request.form.getlist('approver_ids[]')
+    
+    new_rule = ApprovalRule(
+        company_id=session.get('company_id'),
+        name=name,
+        target_user_id=target_user_id,
+        manager_first=manager_first,
+        percentage_threshold=percentage_threshold,
+        specific_approver_id=specific_approver_id,
+        is_sequential=is_sequential
+    )
+    db.session.add(new_rule)
+    db.session.flush() # Get the ID of the new rule before saving the steps
+    
+    # Save the sequence of approvers
+    for index, ap_id in enumerate(approver_ids):
+        step = ApprovalRuleStep(
+            rule_id=new_rule.id,
+            approver_id=ap_id,
+            step_order=index + 1
+        )
+        db.session.add(step)
+        
+    db.session.commit()
+    flash('Approval rule created successfully!', 'success')
+    return redirect(url_for('approval_rules'))
+
+@app.route('/delete_rule/<int:rule_id>')
+def delete_rule(rule_id):
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        return redirect(url_for('dashboard'))
+        
+    rule = ApprovalRule.query.get_or_404(rule_id)
+    db.session.delete(rule)
+    db.session.commit()
+    flash('Rule deleted successfully.', 'success')
+    return redirect(url_for('approval_rules'))
+
+@app.route('/edit_rule/<int:rule_id>')
+def edit_rule(rule_id):
+    # This is a placeholder so the button doesn't crash the page
+    flash('Edit functionality coming soon! For now, please delete and recreate the rule.', 'success')
+    return redirect(url_for('approval_rules'))
 
 # (Optional) OCR Endpoint
 @app.route('/api/ocr', methods=['POST'])
