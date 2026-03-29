@@ -194,12 +194,32 @@ def dashboard():
     
     if user.role == 'Admin':
         users = User.query.filter_by(company_id=user.company_id).all()
-        return render_template('dashboard_admin.html', user=user, users=users)
         
+        # Calculate Admin statistics
+        all_expenses = Expense.query.join(User).filter(User.company_id == session.get('company_id')).all()
+        approved_count = sum(1 for e in all_expenses if e.status == 'Approved')
+        pending_count = sum(1 for e in all_expenses if e.status == 'Pending')
+        
+        return render_template('dashboard_admin.html', 
+                               user=user, 
+                               users=users,
+                               all_expenses=all_expenses,
+                               approved_count=approved_count,
+                               pending_count=pending_count)
+                               
     elif user.role == 'Manager':
         pending_approvals = ApprovalStep.query.filter_by(approver_id=user.id, status='Pending').all()
-        return render_template('dashboard_manager.html', user=user, pending_approvals=pending_approvals)
         
+        # Calculate Manager statistics
+        approved_today = ApprovalStep.query.filter_by(approver_id=user.id, status='Approved').count()
+        team_count = User.query.filter_by(manager_id=user.id).count()
+        
+        return render_template('dashboard_manager.html', 
+                               user=user, 
+                               pending_approvals=pending_approvals,
+                               approved_today=approved_today,
+                               team_count=team_count)
+                               
     else: # Employee
         my_expenses = Expense.query.filter_by(user_id=user.id).all()
         return render_template('dashboard_employee.html', user=user, expenses=my_expenses)
@@ -392,8 +412,9 @@ def all_expenses():
         flash('Unauthorized access.', 'error')
         return redirect(url_for('dashboard'))
     
-    # Fetch all expenses across the company
-    expenses = Expense.query.filter_by(company_id=session.get('company_id')).all()
+    # NEW FIX: Join the User table to filter expenses by the user's company
+    expenses = Expense.query.join(User).filter(User.company_id == session.get('company_id')).all()
+    
     return render_template('all_expenses.html', expenses=expenses)
 
 @app.route('/pending_approvals')

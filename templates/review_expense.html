@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Review Expense — ExpenseFlow{% endblock %}
+{% block page_title %}Review Expense{% endblock %}
+{% block breadcrumb %}Approvals / Review{% endblock %}
+
+{% block extra_styles %}
+<style>
+.review-layout { display:grid; grid-template-columns:1fr 340px; gap:24px; }
+
+.expense-detail-row { display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+.expense-detail-row:last-child { border-bottom:none; }
+.detail-label { font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.detail-value { font-size:14px; font-weight:500; text-align:right; }
+
+.timeline { display:flex; flex-direction:column; gap:0; }
+.timeline-item { display:flex; gap:14px; padding:0 0 20px 0; position:relative; }
+.timeline-item:last-child { padding-bottom:0; }
+.timeline-item::before {
+    content:'';
+    position:absolute;
+    left:15px; top:32px;
+    width:2px; height:calc(100% - 16px);
+    background:var(--border);
+}
+.timeline-item:last-child::before { display:none; }
+.tl-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:1; }
+.tl-icon.approved { background:rgba(34,197,94,0.15); border:2px solid var(--green); color:var(--green); }
+.tl-icon.rejected { background:rgba(239,68,68,0.15); border:2px solid var(--red); color:var(--red); }
+.tl-icon.pending  { background:var(--surface2); border:2px solid var(--border); color:var(--muted); }
+.tl-body { flex:1; padding-top:4px; }
+.tl-name { font-weight:500; font-size:14px; }
+.tl-meta { font-size:12px; color:var(--muted); margin-top:1px; }
+.tl-comment { font-size:12px; color:var(--muted); font-style:italic; margin-top:6px; padding:8px 10px; background:var(--surface2); border-radius:8px; }
+
+.action-box { padding:18px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-lg); }
+.action-title { font-family:'Syne',sans-serif; font-weight:600; font-size:14px; margin-bottom:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if step %}
+<div class="review-layout">
+    <!-- Left: Expense details -->
+    <div>
+        <div class="card" style="margin-bottom:20px;">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Expense #{{ step.expense.id }}</div>
+                    <div class="text-sm text-muted">Submitted by {{ step.expense.employee.name }}</div>
+                </div>
+                <span class="badge {{ step.expense.status|lower }}">{{ step.expense.status }}</span>
+            </div>
+
+            <div class="expense-detail-row">
+                <span class="detail-label">Amount</span>
+                <span class="detail-value" style="color:var(--accent);font-family:'Syne',sans-serif;font-weight:700;font-size:18px;">
+                    {{ step.expense.amount }} {{ step.expense.currency }}
+                </span>
+            </div>
+            <div class="expense-detail-row">
+                <span class="detail-label">In company currency</span>
+                <span class="detail-value">{{ step.expense.base_amount }} (base)</span>
+            </div>
+            <div class="expense-detail-row">
+                <span class="detail-label">Category</span>
+                <span class="detail-value">
+                    <span style="background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:6px;font-size:13px;">{{ step.expense.category }}</span>
+                </span>
+            </div>
+            <div class="expense-detail-row">
+                <span class="detail-label">Date</span>
+                <span class="detail-value">{{ step.expense.date.strftime('%d %B %Y') }}</span>
+            </div>
+            <div class="expense-detail-row">
+                <span class="detail-label">Description</span>
+                <span class="detail-value" style="max-width:300px;text-align:right;">{{ step.expense.description or '—' }}</span>
+            </div>
+            {% if step.expense.receipt_url %}
+            <div class="expense-detail-row">
+                <span class="detail-label">Receipt</span>
+                <a href="{{ step.expense.receipt_url }}" target="_blank" class="btn btn-outline btn-sm">View receipt</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Your action -->
+        {% if step.status == 'Pending' and step.approver_id == session.user_id %}
+        <div class="card">
+            <div class="card-title" style="margin-bottom:16px;">Your decision</div>
+            <form method="POST" action="{{ url_for('approve_expense', step_id=step.id) }}">
+                <div class="form-group">
+                    <label class="form-label">Comment <span style="color:var(--muted);font-weight:400;text-transform:none;">(optional)</span></label>
+                    <textarea name="comments" class="form-control" placeholder="Add a note for the employee…"></textarea>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button type="submit" name="action" value="Approve" class="btn btn-success" style="flex:1;justify-content:center;">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Approve
+                    </button>
+                    <button type="submit" name="action" value="Reject" class="btn btn-danger" style="flex:1;justify-content:center;">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        Reject
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right: Approval timeline -->
+    <div>
+        <div class="card">
+            <div class="card-title" style="margin-bottom:20px;">Approval timeline</div>
+            <div class="timeline">
+                {% for s in step.expense.approval_steps|sort(attribute='step_order') %}
+                <div class="timeline-item">
+                    <div class="tl-icon {{ s.status|lower }}">
+                        {% if s.status == 'Approved' %}
+                        <svg fill="none" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        {% elif s.status == 'Rejected' %}
+                        <svg fill="none" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        {% else %}
+                        <svg fill="none" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {% endif %}
+                    </div>
+                    <div class="tl-body">
+                        <div class="tl-name">{{ s.approver.name }}</div>
+                        <div class="tl-meta">Step {{ s.step_order }} · {{ s.approver.role }} · <span class="badge {{ s.status|lower }}" style="font-size:10px;padding:1px 7px;">{{ s.status }}</span></div>
+                        {% if s.comments %}
+                        <div class="tl-comment">"{{ s.comments }}"</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+            <div style="font-size:12px;color:var(--muted);">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                    <span>Submitted by</span>
+                    <span style="font-weight:500;color:var(--text);">{{ step.expense.employee.name }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;">
+                    <span>Current step</span>
+                    <span style="font-weight:500;color:var(--accent);">Step {{ step.step_order }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <p>Expense not found or you're not authorized to view it.</p>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

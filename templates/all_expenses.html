@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}All Expenses — ExpenseFlow{% endblock %}
+{% block page_title %}All Expenses{% endblock %}
+{% block breadcrumb %}Expense Records{% endblock %}
+
+{% block extra_styles %}
+<style>
+.filter-bar {
+    display: flex; gap: 10px; align-items: center;
+    flex-wrap: wrap; margin-bottom: 20px;
+}
+.filter-bar .form-control { width: auto; }
+
+/* Modal Styles */
+.modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 200;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 32px;
+    width: 100%; max-width: 500px;
+    animation: fadeUp 0.25s ease; position: relative;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.modal-close {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 4px; border-radius: 6px; transition: color 0.15s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; margin-bottom: 20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="filter-bar">
+    <input type="text" id="searchInput" class="form-control" placeholder="Search by name, category…" oninput="filterTable()" style="width:260px;">
+    <select id="statusFilter" class="form-control" onchange="filterTable()">
+        <option value="">All statuses</option>
+        <option value="Pending">Pending</option>
+        <option value="Approved">Approved</option>
+        <option value="Rejected">Rejected</option>
+    </select>
+    <select id="categoryFilter" class="form-control" onchange="filterTable()">
+        <option value="">All categories</option>
+        <option>Travel</option>
+        <option>Meals & Entertainment</option>
+        <option>Accommodation</option>
+        <option>Office Supplies</option>
+        <option>Software & Subscriptions</option>
+        <option>Training & Education</option>
+        <option>Healthcare</option>
+        <option>Miscellaneous</option>
+    </select>
+    <span class="text-muted text-sm" id="rowCount" style="margin-left:auto;"></span>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table id="expenseTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Employee</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Approvals</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exp in expenses %}
+                <tr data-search="{{ exp.employee.name|lower }} {{ exp.category|lower }} {{ exp.description|lower }}"
+                    data-status="{{ exp.status }}"
+                    data-category="{{ exp.category }}">
+                    <td class="text-muted text-sm">#{{ exp.id }}</td>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:9px;">
+                            <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;color:#000;flex-shrink:0;">{{ exp.employee.name[0].upper() }}</div>
+                            <span style="font-size:13px;font-weight:500;">{{ exp.employee.name }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:11px;">{{ exp.category }}</span>
+                    </td>
+                    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--muted);">{{ exp.description or '—' }}</td>
+                    <td>
+                        <div style="font-family:'Syne',sans-serif;font-weight:600;font-size:13px;">{{ exp.amount }} {{ exp.currency }}</div>
+                        <div style="font-size:11px;color:var(--muted);">{{ exp.base_amount }} base</div>
+                    </td>
+                    <td class="text-muted text-sm">{{ exp.date.strftime('%d %b %Y') }}</td>
+                    <td><span class="badge {{ exp.status|lower }}">{{ exp.status }}</span></td>
+                    <td>
+                        <div style="display:flex;gap:3px;">
+                            {% for step in exp.approval_steps %}
+                            <div title="Step {{ step.step_order }}: {{ step.approver.name }} — {{ step.status }}"
+                                 style="width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;
+                                 {% if step.status=='Approved' %}background:rgba(34,197,94,0.2);color:var(--green);
+                                 {% elif step.status=='Rejected' %}background:rgba(239,68,68,0.2);color:var(--red);
+                                 {% else %}background:var(--surface2);color:var(--muted);{% endif %}">
+                                {{ step.step_order }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        <button onclick="document.getElementById('detailModal_{{ exp.id }}').style.display='flex'" class="btn btn-outline btn-sm">View</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9">
+                        <div class="empty-state">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            <p>No expenses in the system yet.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+{% for exp in expenses %}
+<div class="modal-overlay" id="detailModal_{{ exp.id }}" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal" style="max-width: 500px;">
+        <button class="modal-close" onclick="document.getElementById('detailModal_{{ exp.id }}').style.display='none'">
+            <svg fill="none" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="modal-title">Expense Details #{{ exp.id }}</div>
+
+        <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
+            <span class="text-muted text-sm" style="font-weight:600; text-transform:uppercase;">Status</span>
+            <span class="badge {{ exp.status|lower }}">{{ exp.status }}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
+            <span class="text-muted text-sm" style="font-weight:600; text-transform:uppercase;">Amount</span>
+            <span style="color:var(--accent); font-weight:700; font-size:16px;">{{ exp.amount }} {{ exp.currency }}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
+            <span class="text-muted text-sm" style="font-weight:600; text-transform:uppercase;">Employee</span>
+            <span style="font-weight:500;">{{ exp.employee.name }}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
+            <span class="text-muted text-sm" style="font-weight:600; text-transform:uppercase;">Description</span>
+            <span style="text-align:right; max-width:250px;">{{ exp.description or '—' }}</span>
+        </div>
+        
+        {% if exp.receipt_url %}
+        <div style="margin-top:20px;">
+            <a href="{{ exp.receipt_url }}" target="_blank" class="btn btn-outline" style="width:100%; justify-content:center;">View Attached Receipt</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function filterTable() {
+    const q      = document.getElementById('searchInput').value.toLowerCase();
+    const status = document.getElementById('statusFilter').value;
+    const cat    = document.getElementById('categoryFilter').value;
+    const rows   = document.querySelectorAll('#expenseTable tbody tr[data-search]');
+    let visible  = 0;
+    rows.forEach(row => {
+        const matchQ = !q || row.dataset.search.includes(q);
+        const matchS = !status || row.dataset.status === status;
+        const matchC = !cat || row.dataset.category === cat;
+        const show   = matchQ && matchS && matchC;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('rowCount').textContent = `${visible} record${visible !== 1 ? 's' : ''}`;
+}
+filterTable();
+</script>
+{% endblock %}

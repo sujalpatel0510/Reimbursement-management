@@ -4,10 +4,12 @@
 {% block breadcrumb %}Configure Approvals{% endblock %}
 
 {% block topbar_actions %}
+{% if session.get('role') == 'Admin' %}
 <button onclick="document.getElementById('addRuleModal').style.display='flex'" class="btn btn-primary btn-sm">
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
     New Rule
 </button>
+{% endif %}
 {% endblock %}
 
 {% block extra_styles %}
@@ -76,8 +78,10 @@
             <div class="rule-target">Applied to: {{ rule.target_user.name if rule.target_user else 'All users' }}</div>
         </div>
         <div style="display:flex;gap:6px;">
-            <a href="{{ url_for('edit_rule', rule_id=rule.id) }}" class="btn btn-outline btn-sm">Edit</a>
+            {% if session.get('role') == 'Admin' %}
+            <button onclick="document.getElementById('editRuleModal_{{ rule.id }}').style.display='flex'" class="btn btn-outline btn-sm">Edit</button>
             <a href="{{ url_for('delete_rule', rule_id=rule.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete this rule?')">Delete</a>
+            {% endif %}
         </div>
     </div>
 
@@ -217,26 +221,122 @@
     </div>
 </div>
 
+{% if session.get('role') == 'Admin' %}
+{% for rule in rules %}
+<div class="modal-overlay" id="editRuleModal_{{ rule.id }}" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+        <button class="modal-close" onclick="document.getElementById('editRuleModal_{{ rule.id }}').style.display='none'">
+            <svg fill="none" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="modal-title">Edit Rule: {{ rule.name }}</div>
+
+        <form method="POST" action="{{ url_for('edit_rule', rule_id=rule.id) }}">
+            <div class="form-group">
+                <label class="form-label">Rule name</label>
+                <input type="text" name="rule_name" class="form-control" value="{{ rule.name }}" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Apply to user (optional)</label>
+                <select name="target_user_id" class="form-control">
+                    <option value="">All employees</option>
+                    {% for u in users if u.role == 'Employee' %}
+                    <option value="{{ u.id }}" {% if rule.target_user_id == u.id %}selected{% endif %}>{{ u.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Manager is first approver?</label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="manager_first" value="1" {% if rule.manager_first %}checked{% endif %} style="width:16px;height:16px;accent-color:var(--accent);">
+                    <span class="text-sm">Yes, manager approves before other approvers</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Approval sequence</label>
+                <div class="approver-builder" id="editApproverBuilder_{{ rule.id }}">
+                    {% for step in rule.steps|sort(attribute='step_order') %}
+                    <div class="approver-builder-row">
+                        <span class="drag-handle">⠿</span>
+                        <span class="row-num">{{ step.step_order }}</span>
+                        <select name="approver_ids[]" class="form-control" style="flex:1;" required>
+                            {% for u in users if u.role in ['Manager','Admin'] %}
+                            <option value="{{ u.id }}" {% if step.approver_id == u.id %}selected{% endif %}>{{ u.name }} — {{ u.role }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="remove-btn" onclick="removeStep(this)">
+                            <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" onclick="addStep('editApproverBuilder_{{ rule.id }}')" class="btn btn-outline btn-sm" style="margin-top:8px;">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Add step
+                </button>
+            </div>
+
+            <div class="condition-box">
+                <div class="condition-title">Conditional approval (optional)</div>
+                <div class="form-group" style="margin-bottom:14px;">
+                    <label class="form-label" style="font-size:11px;">Percentage rule</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" name="percentage_threshold" class="form-control" value="{{ rule.percentage_threshold or '' }}" placeholder="e.g. 60" min="1" max="100" style="width:90px;">
+                        <span class="text-muted text-sm">% of approvers must approve</span>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label" style="font-size:11px;">Auto-approve if specific approver approves</label>
+                    <select name="specific_approver_id" class="form-control">
+                        <option value="">None</option>
+                        {% for u in users if u.role in ['Manager','Admin'] %}
+                        <option value="{{ u.id }}" {% if rule.specific_approver_id == u.id %}selected{% endif %}>{{ u.name }} — {{ u.role }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:14px;">
+                <label class="form-label">Sequential approvals?</label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="is_sequential" value="1" {% if rule.is_sequential %}checked{% endif %} style="width:16px;height:16px;accent-color:var(--accent);">
+                    <span class="text-sm">Next approver is notified only after current approves</span>
+                </label>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;">Save changes</button>
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('editRuleModal_{{ rule.id }}').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-let stepCount = 1;
 const managers = [
     {% for u in users if u.role in ['Manager','Admin'] %}
     { id: {{ u.id }}, name: "{{ u.name }}", role: "{{ u.role }}" },
     {% endfor %}
 ];
 
-function addStep() {
-    stepCount++;
-    const builder = document.getElementById('approverBuilder');
+function addStep(builderId) {
+    const builder = document.getElementById(builderId);
+    const rows = builder.querySelectorAll('.approver-builder-row');
+    const newStepNum = rows.length + 1;
+
     const row = document.createElement('div');
     row.className = 'approver-builder-row';
-    row.dataset.step = stepCount;
     row.innerHTML = `
         <span class="drag-handle">⠿</span>
-        <span class="row-num">${stepCount}</span>
+        <span class="row-num">${newStepNum}</span>
         <select name="approver_ids[]" class="form-control" style="flex:1;" required>
             <option value="" disabled selected>Select approver…</option>
             ${managers.map(m => `<option value="${m.id}">${m.name} — ${m.role}</option>`).join('')}
@@ -246,18 +346,18 @@ function addStep() {
         </button>
     `;
     builder.appendChild(row);
-    renumberSteps();
+    renumberSteps(builder);
 }
 
 function removeStep(btn) {
-    const rows = document.querySelectorAll('.approver-builder-row');
-    if (rows.length <= 1) return;
+    const builder = btn.closest('.approver-builder');
+    if (builder.querySelectorAll('.approver-builder-row').length <= 1) return; // Keep at least 1 step
     btn.closest('.approver-builder-row').remove();
-    renumberSteps();
+    renumberSteps(builder);
 }
 
-function renumberSteps() {
-    document.querySelectorAll('.approver-builder-row').forEach((row, i) => {
+function renumberSteps(builder) {
+    builder.querySelectorAll('.approver-builder-row').forEach((row, i) => {
         row.querySelector('.row-num').textContent = i + 1;
     });
 }

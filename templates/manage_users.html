@@ -137,7 +137,9 @@
                     </td>
                     <td>
                         <div style="display:flex;gap:6px;">
-                            <a href="{{ url_for('edit_user', user_id=u.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                            <button onclick="openEditModal('{{ u.id }}', '{{ u.name }}', '{{ u.email }}', '{{ u.role }}', '{{ u.is_manager_approver | lower }}', '{{ u.manager_id or '' }}')" class="btn btn-outline btn-sm">
+                                Edit
+                            </button>
                             {% if u.id != user.id %}
                             <a href="{{ url_for('delete_user', user_id=u.id) }}" class="btn btn-danger btn-sm"
                                onclick="return confirm('Remove {{ u.name }}?')">Remove</a>
@@ -227,7 +229,53 @@
         </form>
     </div>
 </div>
+<div class="modal-overlay" id="editUserModal" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+        <button class="modal-close" onclick="document.getElementById('editUserModal').style.display='none'">
+            <svg fill="none" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="modal-title">Edit User</div>
 
+        <form id="editForm" method="POST">
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" id="editName" name="name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" id="editEmail" name="email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select id="editRole" name="role" class="form-control">
+                    <option value="Employee">Employee</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-group">
+    <label class="form-label">Reports To (Manager)</label>
+    <select id="editManagerId" name="manager_id" class="form-control">
+        <option value="">— No manager —</option>
+        {% for u in users if u.role in ['Manager','Admin'] %}
+        <option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>
+        {% endfor %}
+    </select>
+</div>
+            <div class="form-group">
+                <label class="form-label">Manager is approver?</label>
+                <select id="editApprover" name="is_manager_approver" class="form-control">
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:24px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;">Save Changes</button>
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('editUserModal').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -254,5 +302,24 @@ function filterUsers(q) {
 }
 // Default: first role selected
 document.querySelector('.role-option').classList.add('selected');
+function openEditModal(id, name, email, role, isApprover, managerId) {
+    // Set the form action to point to the correct user
+    document.getElementById('editForm').action = "/edit_user/" + id;
+    
+    // Fill in the existing data
+    document.getElementById('editName').value = name;
+    document.getElementById('editEmail').value = email;
+    document.getElementById('editRole').value = role;
+    
+    // Set the manager dropdown
+    document.getElementById('editManagerId').value = managerId || "";
+    
+    // Handle the boolean for the dropdown
+    const approverVal = (isApprover === 'true' || isApprover === 'True') ? 'true' : 'false';
+    document.getElementById('editApprover').value = approverVal;
+    
+    // Show the modal
+    document.getElementById('editUserModal').style.display = 'flex';
+}
 </script>
 {% endblock %}

@@ -2,7 +2,31 @@
 {% block title %}Manager Dashboard — ExpenseFlow{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 {% block breadcrumb %}Manager Overview{% endblock %}
-
+{% block extra_styles %}
+<style>
+/* Modal Styles */
+.modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 200;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 32px;
+    width: 100%; max-width: 600px;
+    animation: fadeUp 0.25s ease; position: relative;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.modal-close {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 4px; border-radius: 6px; transition: color 0.15s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; margin-bottom: 20px; }
+</style>
+{% endblock %}
 {% block content %}
 
 <div class="stats-grid">
@@ -70,7 +94,7 @@
                                 <input type="hidden" name="action" value="Approve">
                                 <button type="submit" class="btn btn-success btn-sm">Approve</button>
                             </form>
-                            <a href="{{ url_for('review_expense', step_id=step.id) }}" class="btn btn-outline btn-sm">Review</a>
+                            <button onclick="document.getElementById('reviewModal_{{ step.id }}').style.display='flex'" class="btn btn-outline btn-sm">Review</button>
                         </div>
                     </td>
                 </tr>
@@ -88,5 +112,52 @@
         </table>
     </div>
 </div>
+
+{% for step in pending_approvals %}
+<div class="modal-overlay" id="reviewModal_{{ step.id }}" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal" style="max-width: 600px;">
+        <button class="modal-close" onclick="document.getElementById('reviewModal_{{ step.id }}').style.display='none'">
+            <svg fill="none" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="modal-title">Review Expense #{{ step.expense.id }}</div>
+
+        <div style="background:var(--surface2); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span class="text-muted text-sm">Employee</span>
+                <span style="font-weight:500;">{{ step.expense.employee.name }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span class="text-muted text-sm">Amount</span>
+                <span style="font-weight:700; color:var(--accent);">{{ step.expense.amount }} {{ step.expense.currency }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span class="text-muted text-sm">Category</span>
+                <span>{{ step.expense.category }}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span class="text-muted text-sm">Description</span>
+                <span style="text-align:right; max-width:60%;">{{ step.expense.description or '—' }}</span>
+            </div>
+            {% if step.expense.receipt_url %}
+            <div style="display:flex; justify-content:space-between; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+                <span class="text-muted text-sm">Receipt</span>
+                <a href="{{ step.expense.receipt_url }}" target="_blank" class="btn btn-outline btn-sm">View Receipt</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <form method="POST" action="{{ url_for('approve_expense', step_id=step.id) }}">
+            <div class="form-group">
+                <label class="form-label">Comment (optional)</label>
+                <textarea name="comments" class="form-control" placeholder="Add a note..."></textarea>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button type="submit" name="action" value="Approve" class="btn btn-success" style="flex:1; justify-content:center;">Approve</button>
+                <button type="submit" name="action" value="Reject" class="btn btn-danger" style="flex:1; justify-content:center;">Reject</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
 
 {% endblock %}
