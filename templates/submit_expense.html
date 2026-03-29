@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Submit Expense — ExpenseFlow{% endblock %}
+{% block page_title %}Submit Expense{% endblock %}
+{% block breadcrumb %}New Expense{% endblock %}
+
+{% block extra_styles %}
+<style>
+.expense-layout { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+
+.ocr-drop {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--surface2);
+    position: relative;
+}
+.ocr-drop:hover, .ocr-drop.dragover {
+    border-color: var(--accent);
+    background: rgba(240,165,0,0.04);
+}
+.ocr-drop input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+.ocr-icon { width:48px;height:48px;margin:0 auto 12px;color:var(--muted); }
+.ocr-title { font-family:'Syne',sans-serif;font-weight:600;font-size:15px;margin-bottom:4px; }
+.ocr-sub { font-size:13px;color:var(--muted); }
+
+.ocr-result {
+    background: rgba(240,165,0,0.08);
+    border: 1px solid rgba(240,165,0,0.2);
+    border-radius: var(--radius);
+    padding: 14px;
+    font-size: 13px;
+    margin-top: 12px;
+    display: none;
+}
+.ocr-result.visible { display: block; }
+.ocr-result pre { white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--muted);margin-top:8px;max-height:120px;overflow-y:auto; }
+
+.step-indicator {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+}
+.step {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+}
+.step:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.step:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+.step .num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+.step.done { color: var(--green); }
+.step.done .num { background: rgba(34,197,94,0.15); border-color: var(--green); color: var(--green); }
+.step.active { color: var(--accent); }
+.step.active .num { background: rgba(240,165,0,0.15); border-color: var(--accent); color: var(--accent); }
+
+.approval-preview {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-top: 16px;
+}
+.approval-preview-title { font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px; }
+.approval-step-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+.approval-step-row:last-child { border-bottom: none; }
+.step-num-badge {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: rgba(240,165,0,0.15);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="expense-layout">
+
+    <!-- LEFT: Form -->
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Expense details</div>
+                <div class="text-sm text-muted">All fields are required unless marked optional</div>
+            </div>
+
+            <form method="POST" action="{{ url_for('submit_expense') }}" id="expenseForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Amount</label>
+                        <input type="number" name="amount" id="amountInput" class="form-control" placeholder="0.00" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Currency</label>
+                        <select name="currency" class="form-control" required>
+                            <option value="USD">USD — US Dollar</option>
+                            <option value="EUR">EUR — Euro</option>
+                            <option value="GBP">GBP — British Pound</option>
+                            <option value="INR" selected>INR — Indian Rupee</option>
+                            <option value="AUD">AUD — Australian Dollar</option>
+                            <option value="CAD">CAD — Canadian Dollar</option>
+                            <option value="JPY">JPY — Japanese Yen</option>
+                            <option value="SGD">SGD — Singapore Dollar</option>
+                            <option value="AED">AED — UAE Dirham</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select name="category" class="form-control" required>
+                            <option value="" disabled selected>Select category…</option>
+                            <option>Travel</option>
+                            <option>Meals & Entertainment</option>
+                            <option>Accommodation</option>
+                            <option>Office Supplies</option>
+                            <option>Software & Subscriptions</option>
+                            <option>Training & Education</option>
+                            <option>Healthcare</option>
+                            <option>Miscellaneous</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Date</label>
+                        <input type="date" name="date" class="form-control" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description <span style="color:var(--muted);font-weight:400;text-transform:none;">(optional)</span></label>
+                    <textarea name="description" id="descInput" class="form-control" placeholder="What was this expense for?"></textarea>
+                </div>
+
+                <div style="display:flex;gap:10px;margin-top:8px;">
+                    <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        Submit for approval
+                    </button>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RIGHT: Receipt & approval info -->
+    <div>
+        <!-- OCR Upload -->
+        <div class="card mb-4" style="margin-bottom:20px;">
+            <div class="card-header">
+                <div class="card-title">📄 Receipt (OCR)</div>
+                <span class="badge pending">Optional</span>
+            </div>
+            <div class="ocr-drop" id="ocrDrop">
+                <input type="file" accept="image/*" id="receiptFile">
+                <svg class="ocr-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <div class="ocr-title">Upload receipt</div>
+                <div class="ocr-sub">Drag & drop or click to scan<br>JPG, PNG supported</div>
+            </div>
+            <div class="ocr-result" id="ocrResult">
+                <div style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--accent);margin-bottom:4px;">
+                    <svg fill="none" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    OCR extracted text
+                </div>
+                <pre id="ocrText"></pre>
+                <button type="button" onclick="autofillFromOCR()" class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;justify-content:center;">
+                    Auto-fill form fields
+                </button>
+            </div>
+        </div>
+
+        <!-- Approval chain info -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Approval flow</div>
+            </div>
+            <p class="text-sm text-muted" style="margin-bottom:12px;">Once submitted, your expense will go through the following approval steps:</p>
+
+            <div class="approval-preview">
+                <div class="approval-preview-title">Approval chain</div>
+                {% if user.manager_id and user.is_manager_approver %}
+                <div class="approval-step-row">
+                    <div class="step-num-badge">1</div>
+                    <div>
+                        <div style="font-weight:500;font-size:13px;">{{ user.manager.name if user.manager else 'Your Manager' }}</div>
+                        <div class="text-muted" style="font-size:11px;">Manager approval</div>
+                    </div>
+                    <span class="badge pending" style="margin-left:auto;">Pending</span>
+                </div>
+                {% endif %}
+                <div class="approval-step-row" style="color:var(--muted);">
+                    <div class="step-num-badge" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);">+</div>
+                    <div style="font-size:12px;">Additional steps per approval rule</div>
+                </div>
+            </div>
+
+            <div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:var(--radius);font-size:12px;color:var(--muted);">
+                <svg fill="none" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" style="vertical-align:-2px;margin-right:4px;color:var(--accent);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Amount shown to approvers in company's default currency.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// OCR upload
+document.getElementById('receiptFile').addEventListener('change', async function() {
+    const file = this.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('receipt', file);
+    try {
+        const res = await fetch('/api/ocr', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.raw_text) {
+            document.getElementById('ocrText').textContent = data.raw_text;
+            document.getElementById('ocrResult').classList.add('visible');
+            window._ocrText = data.raw_text;
+        }
+    } catch(e) { console.error('OCR failed', e); }
+});
+
+const drop = document.getElementById('ocrDrop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('receiptFile').files = dt.files;
+        document.getElementById('receiptFile').dispatchEvent(new Event('change'));
+    }
+});
+
+function autofillFromOCR() {
+    const text = window._ocrText || '';
+    // Simple heuristic: pull amount (first number with decimal)
+    const amountMatch = text.match(/\b(\d+[\.,]\d{2})\b/);
+    if (amountMatch) document.getElementById('amountInput').value = amountMatch[1].replace(',','.');
+    // Pull first substantial line as description
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+    if (lines.length) document.getElementById('descInput').value = lines[0];
+}
+
+// Set today as default date
+document.querySelector('input[name=date]').valueAsDate = new Date();
+</script>
+{% endblock %}
