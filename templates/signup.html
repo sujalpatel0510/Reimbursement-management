@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Create Account — ExpenseFlow{% endblock %}
+
+{% block extra_styles %}
+<style>
+.auth-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    padding: 40px 20px;
+}
+.auth-wrapper::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(240,165,0,0.07) 0%, transparent 70%);
+    top: -200px; right: -200px;
+    pointer-events: none;
+}
+.auth-box {
+    width: 100%;
+    max-width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px;
+    position: relative;
+    z-index: 1;
+    animation: fadeUp 0.5s ease;
+}
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.auth-logo { margin-bottom: 28px; }
+.auth-logo .wordmark { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; color: var(--accent); }
+.auth-logo .tagline  { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.auth-heading { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 20px; margin-bottom: 6px; }
+.auth-sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; }
+
+.section-divider {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 20px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.btn-full { width: 100%; justify-content: center; padding: 12px; font-size: 15px; border-radius: 10px; }
+.auth-footer { text-align: center; font-size: 13px; color: var(--muted); margin-top: 20px; }
+.auth-footer a { color: var(--accent); text-decoration: none; }
+.info-hint {
+    background: rgba(240,165,0,0.08);
+    border: 1px solid rgba(240,165,0,0.2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+</style>
+{% endblock %}
+
+{% block auth_content %}
+<div class="auth-wrapper">
+    <div class="auth-box">
+        <div class="auth-logo">
+            <div class="wordmark">ExpenseFlow</div>
+            <div class="tagline">Reimbursement Management</div>
+        </div>
+
+        <div class="auth-heading">Create your company</div>
+        <div class="auth-sub">Set up your workspace. You'll be the Admin.</div>
+
+        <div class="info-hint">
+            <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" style="flex-shrink:0;margin-top:1px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Your company's default currency will be auto-set based on your selected country.
+        </div>
+
+        <form method="POST" action="{{ url_for('signup') }}">
+            <div class="section-divider">Company info</div>
+
+            <div class="form-group">
+                <label class="form-label">Company Name</label>
+                <input type="text" name="company_name" class="form-control" placeholder="Acme Corp" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Country</label>
+                <select name="country" class="form-control" required>
+                    <option value="" disabled selected>Select country…</option>
+                    <option>India</option>
+                    <option>United States</option>
+                    <option>United Kingdom</option>
+                    <option>Germany</option>
+                    <option>France</option>
+                    <option>Australia</option>
+                    <option>Canada</option>
+                    <option>Japan</option>
+                    <option>Singapore</option>
+                    <option>United Arab Emirates</option>
+                </select>
+            </div>
+
+            <div class="section-divider">Admin account</div>
+
+            <div class="form-group">
+                <label class="form-label">Your Name</label>
+                <input type="text" name="admin_name" class="form-control" placeholder="Jane Doe" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="admin@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" style="margin-top:8px;">
+                Create workspace
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
