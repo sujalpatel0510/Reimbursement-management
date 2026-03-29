@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Manage Users — ExpenseFlow{% endblock %}
+{% block page_title %}Manage Users{% endblock %}
+{% block breadcrumb %}Users{% endblock %}
+
+{% block topbar_actions %}
+<button onclick="document.getElementById('addUserModal').style.display='flex'" class="btn btn-primary btn-sm">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Add User
+</button>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+.modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal-overlay.open { display: flex; }
+.modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    width: 100%;
+    max-width: 480px;
+    animation: fadeUp 0.25s ease;
+    position: relative;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.modal-close {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 4px;
+    border-radius: 6px; transition: color 0.15s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-title { font-family:'Syne',sans-serif; font-weight:700; font-size:18px; margin-bottom:20px; }
+.role-selector { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.role-option {
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+.role-option:hover { border-color: rgba(240,165,0,0.4); }
+.role-option input { display: none; }
+.role-option.selected { border-color: var(--accent); background: rgba(240,165,0,0.08); }
+.role-option .role-name { font-family:'Syne',sans-serif; font-weight:600; font-size:14px; margin-bottom:2px; }
+.role-option .role-desc { font-size:11px; color:var(--muted); }
+
+.manager-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.toggle-switch {
+    width: 36px; height: 20px;
+    background: var(--border);
+    border-radius: 100px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+.toggle-switch.on { background: var(--accent); }
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+}
+.toggle-switch.on::after { transform: translateX(16px); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">All users — {{ users|length }} total</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="searchInput" placeholder="Search users…" class="form-control" style="width:220px;" oninput="filterUsers(this.value)">
+        </div>
+    </div>
+
+    <div class="table-wrap">
+        <table id="usersTable">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Manager</th>
+                    <th>Manager Approver</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr data-name="{{ u.name|lower }}" data-email="{{ u.email|lower }}">
+                    <td>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:#000;flex-shrink:0;">{{ u.name[0].upper() }}</div>
+                            <div>
+                                <div style="font-weight:500;">{{ u.name }}</div>
+                                <div class="text-muted text-sm">{{ u.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge {% if u.role == 'Admin' %}approved{% elif u.role == 'Manager' %}pending{% else %}{% endif %}"
+                              style="{% if u.role == 'Employee' %}background:rgba(107,114,128,0.15);color:#9ca3af;{% endif %}">
+                            {{ u.role }}
+                        </span>
+                    </td>
+                    <td class="text-sm">{{ u.manager.name if u.manager else '—' }}</td>
+                    <td>
+                        {% if u.is_manager_approver %}
+                        <span style="color:var(--green);font-size:12px;font-weight:600;">✓ Yes</span>
+                        {% else %}
+                        <span class="text-muted text-sm">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:6px;">
+                            <a href="{{ url_for('edit_user', user_id=u.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                            {% if u.id != user.id %}
+                            <a href="{{ url_for('delete_user', user_id=u.id) }}" class="btn btn-danger btn-sm"
+                               onclick="return confirm('Remove {{ u.name }}?')">Remove</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+                            <p>No users yet. Add your first team member.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="addUserModal" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+        <button class="modal-close" onclick="document.getElementById('addUserModal').style.display='none'">
+            <svg fill="none" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        <div class="modal-title">Add new user</div>
+
+        <form method="POST" action="{{ url_for('create_user') }}">
+            <div class="form-group">
+                <label class="form-label">Full name</label>
+                <input type="text" name="name" class="form-control" placeholder="Jane Doe" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email address</label>
+                <input type="email" name="email" class="form-control" placeholder="jane@company.com" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Temporary password</label>
+                <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <div class="role-selector" id="roleSelector">
+                    <label class="role-option" onclick="selectRole(this,'Employee')">
+                        <input type="radio" name="role" value="Employee">
+                        <div class="role-name">Employee</div>
+                        <div class="role-desc">Submit & track expenses</div>
+                    </label>
+                    <label class="role-option" onclick="selectRole(this,'Manager')">
+                        <input type="radio" name="role" value="Manager">
+                        <div class="role-name">Manager</div>
+                        <div class="role-desc">Approve team expenses</div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Manager (optional)</label>
+                <select name="manager_id" class="form-control">
+                    <option value="">— No manager —</option>
+                    {% for u in users if u.role in ['Manager','Admin'] %}
+                    <option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Manager is approver?</label>
+                <label class="manager-toggle" onclick="toggleApprover(this)">
+                    <div>
+                        <div style="font-size:14px;font-weight:500;">Manager approves first</div>
+                        <div class="text-muted text-sm">Expense goes to manager before other approvers</div>
+                    </div>
+                    <div class="toggle-switch on" id="approverToggle"></div>
+                    <input type="hidden" name="is_manager_approver" id="approverInput" value="true">
+                </label>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:4px;">
+                <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center;">Create user</button>
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('addUserModal').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function selectRole(el, role) {
+    document.querySelectorAll('.role-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    el.querySelector('input').checked = true;
+}
+
+function toggleApprover(el) {
+    const toggle = document.getElementById('approverToggle');
+    const input  = document.getElementById('approverInput');
+    const isOn   = toggle.classList.toggle('on');
+    input.value  = isOn ? 'true' : 'false';
+}
+
+function filterUsers(q) {
+    q = q.toLowerCase();
+    document.querySelectorAll('#usersTable tbody tr[data-name]').forEach(row => {
+        const match = row.dataset.name.includes(q) || row.dataset.email.includes(q);
+        row.style.display = match ? '' : 'none';
+    });
+}
+// Default: first role selected
+document.querySelector('.role-option').classList.add('selected');
+</script>
+{% endblock %}
