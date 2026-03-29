@@ -530,10 +530,44 @@ def delete_rule(rule_id):
     flash('Rule deleted successfully.', 'success')
     return redirect(url_for('approval_rules'))
 
-@app.route('/edit_rule/<int:rule_id>')
+@app.route('/edit_rule/<int:rule_id>', methods=['POST'])
 def edit_rule(rule_id):
-    # This is a placeholder so the button doesn't crash the page
-    flash('Edit functionality coming soon! For now, please delete and recreate the rule.', 'success')
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        return redirect(url_for('dashboard'))
+        
+    rule = ApprovalRule.query.get_or_404(rule_id)
+    
+    # 1. Update basic rule details
+    rule.name = request.form.get('rule_name')
+    target_user_id = request.form.get('target_user_id')
+    rule.target_user_id = int(target_user_id) if target_user_id else None
+    rule.manager_first = request.form.get('manager_first') == '1'
+    
+    pct = request.form.get('percentage_threshold')
+    rule.percentage_threshold = int(pct) if pct else None
+    
+    spec_app = request.form.get('specific_approver_id')
+    rule.specific_approver_id = int(spec_app) if spec_app else None
+    
+    rule.is_sequential = request.form.get('is_sequential') == '1'
+    
+    # 2. Rebuild the approval steps
+    approver_ids = request.form.getlist('approver_ids[]')
+    
+    # Delete the old steps sequence
+    ApprovalRuleStep.query.filter_by(rule_id=rule.id).delete()
+    
+    # Save the new steps sequence
+    for index, ap_id in enumerate(approver_ids):
+        step = ApprovalRuleStep(
+            rule_id=rule.id,
+            approver_id=ap_id,
+            step_order=index + 1
+        )
+        db.session.add(step)
+        
+    db.session.commit()
+    flash('Approval rule updated successfully!', 'success')
     return redirect(url_for('approval_rules'))
 
 # (Optional) OCR Endpoint
