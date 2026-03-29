@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ExpenseFlow{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #0d0f14;
+            --surface:   #141720;
+            --surface2:  #1c2030;
+            --border:    rgba(255,255,255,0.07);
+            --accent:    #f0a500;
+            --accent2:   #ff6b35;
+            --green:     #22c55e;
+            --red:       #ef4444;
+            --blue:      #3b82f6;
+            --text:      #e8eaf0;
+            --muted:     #6b7280;
+            --radius:    12px;
+            --radius-lg: 20px;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 240px;
+            min-height: 100vh;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0; top: 0;
+            z-index: 100;
+        }
+        .sidebar-logo { padding: 28px 24px 20px; border-bottom: 1px solid var(--border); }
+        .sidebar-logo .wordmark { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; color: var(--accent); }
+        .sidebar-logo .tagline  { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+        .sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+        .nav-section-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 1.2px; text-transform: uppercase; padding: 12px 12px 6px; }
+        .nav-link {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 14px; border-radius: var(--radius);
+            color: var(--muted); text-decoration: none;
+            font-size: 14px; font-weight: 500;
+            transition: all 0.18s ease; position: relative;
+        }
+        .nav-link:hover { background: var(--surface2); color: var(--text); }
+        .nav-link.active { background: rgba(240,165,0,0.12); color: var(--accent); }
+        .nav-link.active::before {
+            content:''; position:absolute; left:0; top:20%; height:60%;
+            width:3px; background:var(--accent); border-radius:0 3px 3px 0;
+        }
+        .nav-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+        .sidebar-footer { padding: 16px 12px; border-top: 1px solid var(--border); }
+        .user-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface2); }
+        .user-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: #000; flex-shrink: 0;
+        }
+        .user-info { flex: 1; min-width: 0; }
+        .user-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-role { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+        .logout-link {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 12px; border-radius: var(--radius);
+            color: var(--muted); text-decoration: none; font-size: 13px;
+            transition: all 0.18s ease; margin-top: 6px;
+        }
+        .logout-link:hover { color: var(--red); background: rgba(239,68,68,0.08); }
+
+        /* MAIN */
+        .main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+        .topbar {
+            padding: 20px 32px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--surface); position: sticky; top: 0; z-index: 50;
+        }
+        .page-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--text); }
+        .breadcrumb { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .breadcrumb span { color: var(--accent); }
+        .topbar-actions { display: flex; align-items: center; gap: 12px; }
+        .content { padding: 32px; flex: 1; }
+
+        /* FLASH */
+        .flash-messages { margin-bottom: 24px; }
+        .flash {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 16px; border-radius: var(--radius);
+            font-size: 14px; margin-bottom: 8px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+        .flash.success { background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.25); color:#4ade80; }
+        .flash.error   { background:rgba(239,68,68,0.12);  border:1px solid rgba(239,68,68,0.25);  color:#f87171; }
+
+        /* CARDS */
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; }
+        .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+        .card-title  { font-family:'Syne',sans-serif; font-weight:600; font-size:15px; }
+
+        /* STATS */
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:28px; }
+        .stat-card {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:var(--radius-lg); padding:20px;
+            position:relative; overflow:hidden; transition:border-color 0.2s;
+        }
+        .stat-card:hover { border-color:rgba(240,165,0,0.3); }
+        .stat-card::after { content:''; position:absolute; top:0; right:0; width:60px; height:60px; border-radius:0 0 0 60px; opacity:0.08; }
+        .stat-card.orange::after { background:var(--accent); }
+        .stat-card.green::after  { background:var(--green);  }
+        .stat-card.red::after    { background:var(--red);    }
+        .stat-card.blue::after   { background:var(--blue);   }
+        .stat-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+        .stat-icon svg { width:20px; height:20px; }
+        .stat-card.orange .stat-icon { background:rgba(240,165,0,0.15); color:var(--accent); }
+        .stat-card.green  .stat-icon { background:rgba(34,197,94,0.15);  color:var(--green); }
+        .stat-card.red    .stat-icon { background:rgba(239,68,68,0.15);  color:var(--red);   }
+        .stat-card.blue   .stat-icon { background:rgba(59,130,246,0.15); color:var(--blue);  }
+        .stat-value { font-family:'Syne',sans-serif; font-weight:700; font-size:28px; line-height:1; margin-bottom:4px; }
+        .stat-label { font-size:12px; color:var(--muted); }
+
+        /* TABLE */
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; font-size:14px; }
+        thead th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+        tbody tr { border-bottom:1px solid var(--border); transition:background 0.15s; }
+        tbody tr:hover { background:rgba(255,255,255,0.025); }
+        tbody tr:last-child { border-bottom:none; }
+        td { padding:13px 14px; vertical-align:middle; }
+
+        /* BADGES */
+        .badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:600; }
+        .badge::before { content:''; width:6px; height:6px; border-radius:50%; }
+        .badge.pending  { background:rgba(251,191,36,0.12); color:#fbbf24; }
+        .badge.pending::before  { background:#fbbf24; }
+        .badge.approved { background:rgba(34,197,94,0.12);  color:#22c55e; }
+        .badge.approved::before { background:#22c55e; }
+        .badge.rejected { background:rgba(239,68,68,0.12);  color:#ef4444; }
+        .badge.rejected::before { background:#ef4444; }
+
+        /* BUTTONS */
+        .btn { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:500; cursor:pointer; text-decoration:none; transition:all 0.18s ease; border:none; white-space:nowrap; }
+        .btn svg { width:16px; height:16px; }
+        .btn-primary { background:var(--accent); color:#000; }
+        .btn-primary:hover { background:#e09500; transform:translateY(-1px); }
+        .btn-outline { background:transparent; border:1px solid var(--border); color:var(--text); }
+        .btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+        .btn-danger  { background:rgba(239,68,68,0.15);  color:#ef4444; border:1px solid rgba(239,68,68,0.25); }
+        .btn-danger:hover  { background:rgba(239,68,68,0.25); }
+        .btn-success { background:rgba(34,197,94,0.15);  color:#22c55e; border:1px solid rgba(34,197,94,0.25); }
+        .btn-success:hover { background:rgba(34,197,94,0.25); }
+        .btn-sm { padding:6px 14px; font-size:13px; }
+
+        /* FORMS */
+        .form-group { margin-bottom:18px; }
+        .form-label { display:block; font-size:12px; font-weight:600; color:var(--muted); letter-spacing:0.5px; text-transform:uppercase; margin-bottom:7px; }
+        .form-control { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px; outline:none; transition:border-color 0.2s; }
+        .form-control:focus { border-color:var(--accent); }
+        .form-control::placeholder { color:var(--muted); }
+        select.form-control option { background:var(--surface2); }
+        textarea.form-control { resize:vertical; min-height:90px; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+        /* UTILS */
+        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        .flex-between { display:flex; align-items:center; justify-content:space-between; }
+        .gap-3 { gap:12px; }
+        .mt-4  { margin-top:16px; }
+        .mt-6  { margin-top:24px; }
+        .mb-4  { margin-bottom:16px; }
+        .text-muted  { color:var(--muted); }
+        .text-sm     { font-size:13px; }
+        .text-accent { color:var(--accent); }
+        .text-green  { color:var(--green); }
+        .text-red    { color:var(--red); }
+
+        /* EMPTY STATE */
+        .empty-state { text-align:center; padding:56px 24px; color:var(--muted); }
+        .empty-state svg { width:48px; height:48px; margin-bottom:12px; opacity:0.4; }
+        .empty-state p { font-size:14px; }
+    </style>
+    {% block extra_styles %}{% endblock %}
+</head>
+<body>
+
+{% if 'user_id' in session %}
+<aside class="sidebar">
+    <div class="sidebar-logo">
+        <div class="wordmark">ExpenseFlow</div>
+        <div class="tagline">Reimbursement Mgmt</div>
+    </div>
+    <nav class="sidebar-nav">
+        {% if session.get('role') == 'Admin' %}
+        <div class="nav-section-label">Admin</div>
+        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            Dashboard
+        </a>
+        <a href="{{ url_for('manage_users') }}" class="nav-link {% if request.endpoint=='manage_users' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Manage Users
+        </a>
+        <a href="{{ url_for('approval_rules') }}" class="nav-link {% if request.endpoint=='approval_rules' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+            Approval Rules
+        </a>
+        <a href="{{ url_for('all_expenses') }}" class="nav-link {% if request.endpoint=='all_expenses' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            All Expenses
+        </a>
+        {% elif session.get('role') == 'Manager' %}
+        <div class="nav-section-label">Manager</div>
+        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            Dashboard
+        </a>
+        <a href="{{ url_for('pending_approvals') }}" class="nav-link {% if request.endpoint=='pending_approvals' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Pending Approvals
+        </a>
+        <a href="{{ url_for('team_expenses') }}" class="nav-link {% if request.endpoint=='team_expenses' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            Team Expenses
+        </a>
+        {% else %}
+        <div class="nav-section-label">Employee</div>
+        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            Dashboard
+        </a>
+        <a href="{{ url_for('submit_expense') }}" class="nav-link {% if request.endpoint=='submit_expense' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New Expense
+        </a>
+        <a href="{{ url_for('my_expenses') }}" class="nav-link {% if request.endpoint=='my_expenses' %}active{% endif %}">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            My Expenses
+        </a>
+        {% endif %}
+    </nav>
+    <div class="sidebar-footer">
+        <div class="user-chip">
+            <div class="user-avatar">{{ session.get('user_name','U')[0].upper() }}</div>
+            <div class="user-info">
+                <div class="user-name">{{ session.get('user_name','User') }}</div>
+                <div class="user-role">{{ session.get('role','') }}</div>
+            </div>
+        </div>
+        <a href="{{ url_for('logout') }}" class="logout-link">
+            <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            Log out
+        </a>
+    </div>
+</aside>
+
+<div class="main">
+    <header class="topbar">
+        <div>
+            <div class="page-title">{% block page_title %}Dashboard{% endblock %}</div>
+            <div class="breadcrumb">ExpenseFlow / <span>{% block breadcrumb %}Home{% endblock %}</span></div>
+        </div>
+        <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+    </header>
+    <div class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash {{ category }}">
+                {% if category == 'success' %}
+                <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                {% else %}
+                <svg fill="none" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {% endif %}
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+{% else %}
+<div style="flex:1;">{% block auth_content %}{% endblock %}</div>
+{% endif %}
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>
