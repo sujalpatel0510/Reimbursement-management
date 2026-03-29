@@ -60,9 +60,10 @@ class ApprovalStep(db.Model):
     expense_id = db.Column(db.Integer, db.ForeignKey('expenses.id'), nullable=False)
     approver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     step_order = db.Column(db.Integer, nullable=False)
-    status = db.Column(db.String(20), default='Pending') # Pending, Approved, Rejected
+    status = db.Column(db.String(20), default='Pending') 
     comments = db.Column(db.Text, nullable=True)
-
+    
+    approver = db.relationship('User', foreign_keys=[approver_id])
 
 # --- 3. Utility Functions ---
 def get_currency_for_country(country_name):
@@ -269,7 +270,236 @@ def delete_user(user_id):
 
 
 
+@app.route('/submit_expense', methods=['GET', 'POST'])
+def submit_expense():
+    """Employee can submit expense claims"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+        
+    user = User.query.get(session['user_id'])
+    
+    if request.method == 'POST':
+        amount = float(request.form.get('amount'))
+        currency = request.form.get('currency')
+        category = request.form.get('category')
+        description = request.form.get('description')
+        date_str = request.form.get('date')
+        
+        company = Company.query.get(user.company_id)
+        base_amount = convert_currency(amount, currency, company.default_currency)
+        
+        new_expense = Expense(
+            user_id=user.id,
+            amount=amount,
+            currency=currency,
+            base_amount=base_amount,
+            category=category,
+            description=description,
+            date=datetime.strptime(date_str, '%Y-%m-%d').date()
+        )
+        db.session.add(new_expense)
+        db.session.flush()
+        
+        if user.manager_id and user.is_manager_approver:
+            step1 = ApprovalStep(
+                expense_id=new_expense.id, 
+                approver_id=user.manager_id, 
+                step_order=1
+            )
+            db.session.add(step1)
+            
+        db.session.commit()
+        flash('Expense submitted successfully!', 'success')
+        return redirect(url_for('dashboard'))
+        
+    return render_template('submit_expense.html', user=user)
 
+@app.route('/approve_expense/<int:step_id>', methods=['POST'])
+def approve_expense(step_id):
+    """Manager approves or rejects expenses"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+        
+    step = ApprovalStep.query.get_or_404(step_id)
+    
+    if step.approver_id != session['user_id']:
+        flash('Unauthorized action.', 'error')
+        return redirect(url_for('dashboard'))
+        
+    action = request.form.get('action') # "Approve" or "Reject"
+    comments = request.form.get('comments', '')
+    
+    step.status = 'Approved' if action == 'Approve' else 'Rejected'
+    step.comments = comments
+    
+    expense = Expense.query.get(step.expense_id)
+    
+    if action == 'Reject':
+        expense.status = 'Rejected'
+    elif action == 'Approve':
+        next_steps = ApprovalStep.query.filter_by(expense_id=expense.id, status='Pending').count()
+        if next_steps == 0:
+            expense.status = 'Approved'
+            
+    db.session.commit()
+    flash(f'Expense {action.lower()}d.', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/review_expense/<int:step_id>')
+def review_expense(step_id):
+    """Detailed view for a manager to review an expense before approving/rejecting."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+        
+    # Fetch the specific approval step
+    step = ApprovalStep.query.get_or_404(step_id)
+    
+    # Security check: Only the assigned approver (or an Admin) can view this specific review page
+    if step.approver_id != session.get('user_id') and session.get('role') != 'Admin':
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+        
+    return render_template('review_expense.html', step=step)
+
+
+@app.route('/all_expenses')
+def all_expenses():
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Fetch all expenses across the company
+    expenses = Expense.query.filter_by(company_id=session.get('company_id')).all()
+    return render_template('all_expenses.html', expenses=expenses)
+
+@app.route('/pending_approvals')
+def pending_approvals():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # We use .join(Expense) to make sure the expense data is loaded 
+    # and ready for the HTML table
+    pending = ApprovalStep.query.join(Expense).filter(
+        ApprovalStep.approver_id == session.get('user_id'),
+        ApprovalStep.status == 'Pending'
+    ).all()
+    
+    # We also need to pass 'user' so the sidebar and name show up correctly
+    current_user = User.query.get(session.get('user_id'))
+    
+    return render_template('dashboard_manager.html', 
+                           pending_approvals=pending, 
+                           user=current_user)
+
+@app.route('/team_expenses')
+def team_expenses():
+    # 1. Security Check: Only Admins and Managers can view this page
+    if 'user_id' not in session or session.get('role') not in ['Admin', 'Manager']:
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # 2. Fetch the right expenses based on the user's role
+    if session.get('role') == 'Admin':
+        # Admins can see every expense in the company
+        expenses = Expense.query.filter_by(company_id=session.get('company_id')).all()
+    else:
+        # Managers only see expenses from their direct reports
+        subordinates = User.query.filter_by(manager_id=session.get('user_id')).all()
+        
+        # Extract just the ID numbers of the subordinates
+        sub_ids = [s.id for s in subordinates]
+        
+        # Fetch expenses where the submitter's ID is in our list of subordinates
+        expenses = Expense.query.filter(Expense.user_id.in_(sub_ids)).all()
+        
+    # 3. Send the data to the HTML template
+    return render_template('all_expenses.html', expenses=expenses)
+
+
+def team_expenses():
+    if 'user_id' not in session or session.get('role') not in ['Admin', 'Manager']:
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Admins see all, Managers see their direct reports
+    if session.get('role') == 'Admin':
+        expenses = Expense.query.filter_by(company_id=session.get('company_id')).all()
+    else:
+        # Get list of employee IDs who report to this manager
+        subordinates = User.query.filter_by(manager_id=session.get('user_id')).all()
+        sub_ids = [s.id for s in subordinates]
+        expenses = Expense.query.filter(Expense.user_id.in_(sub_ids)).all()
+        
+    return render_template('all_expenses.html', expenses=expenses)
+
+@app.route('/my_expenses')
+def my_expenses():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Corrected to use user_id to match your database model
+    expenses = Expense.query.filter_by(user_id=session.get('user_id')).all()
+    return render_template('dashboard_employee.html', expenses=expenses)
+
+@app.route('/approval_rules')
+def approval_rules():
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # We need the users list to populate the 'Add Rule' modal in the HTML
+    users = User.query.filter_by(company_id=session.get('company_id')).all()
+    # You'll eventually need a Rule model, but for now, this loads the page
+    return render_template('approval_rules.html', users=users)
+
+
+# (Optional) OCR Endpoint
+@app.route('/api/ocr', methods=['POST'])
+def api_ocr():
+    if 'receipt' not in request.files:
+        return jsonify({"error": "No receipt file"}), 400
+    try:
+        img = Image.open(request.files['receipt'])
+        text = pytesseract.image_to_string(img)
+        return jsonify({"raw_text": text, "status": "success"})
+    except Exception as e:
+        return jsonify({"error": str(e), "status": "failed"}), 500
+
+@app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
+def edit_user(user_id):
+    if request.method == 'GET':
+        return redirect(url_for('manage_users'))
+
+    if 'user_id' not in session or session.get('role') != 'Admin':
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+
+    user_to_edit = User.query.get_or_404(user_id)
+    
+    # Update fields from form
+    user_to_edit.name = request.form.get('name')
+    user_to_edit.email = request.form.get('email')
+    user_to_edit.role = request.form.get('role') # Updated: captures new role
+    
+    # Update Manager (New)
+    manager_id = request.form.get('manager_id')
+    user_to_edit.manager_id = int(manager_id) if manager_id else None
+    
+    is_approver_str = request.form.get('is_manager_approver', 'false')
+    user_to_edit.is_manager_approver = (is_approver_str.lower() == 'true')
+
+    try:
+        db.session.commit()
+        flash(f'User {user_to_edit.name} updated successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating user.', 'error')
+
+    return redirect(url_for('manage_users'))
+
+
+
+# --- 6. Run Application ---
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
