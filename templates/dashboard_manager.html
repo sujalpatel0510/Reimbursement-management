@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Manager Dashboard — ExpenseFlow{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block breadcrumb %}Manager Overview{% endblock %}
+
+{% block content %}
+
+<div class="stats-grid">
+    <div class="stat-card orange">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="stat-value">{{ pending_approvals|length }}</div>
+        <div class="stat-label">Pending Approvals</div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="stat-value">{{ approved_today if approved_today is defined else '—' }}</div>
+        <div class="stat-label">Approved Today</div>
+    </div>
+    <div class="stat-card blue">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+        </div>
+        <div class="stat-value">{{ team_count if team_count is defined else '—' }}</div>
+        <div class="stat-label">Team Members</div>
+    </div>
+</div>
+
+<!-- Pending approvals -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Expenses awaiting your review</div>
+        <a href="{{ url_for('pending_approvals') }}" class="btn btn-outline btn-sm">View all</a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Step</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for step in pending_approvals[:5] %}
+                <tr>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--accent));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:#fff;">{{ step.expense.employee.name[0].upper() }}</div>
+                            <span style="font-weight:500;">{{ step.expense.employee.name }}</span>
+                        </div>
+                    </td>
+                    <td class="text-sm">{{ step.expense.category }}</td>
+                    <td>
+                        <span style="font-family:'Syne',sans-serif;font-weight:600;color:var(--accent);">
+                            {{ step.expense.base_amount }} <span class="text-muted text-sm">base</span>
+                        </span>
+                    </td>
+                    <td class="text-muted text-sm">{{ step.expense.date.strftime('%d %b %Y') }}</td>
+                    <td><span class="badge pending">Step {{ step.step_order }}</span></td>
+                    <td>
+                        <div style="display:flex;gap:6px;">
+                            <form method="POST" action="{{ url_for('approve_expense', step_id=step.id) }}" style="display:inline;">
+                                <input type="hidden" name="action" value="Approve">
+                                <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                            </form>
+                            <a href="{{ url_for('review_expense', step_id=step.id) }}" class="btn btn-outline btn-sm">Review</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <p>No pending approvals — you're all caught up!</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — ExpenseFlow{% endblock %}
+{% block page_title %}My Dashboard{% endblock %}
+{% block breadcrumb %}Expense Overview{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('submit_expense') }}" class="btn btn-primary btn-sm">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    New Expense
+</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <div class="stat-value">{{ expenses|length }}</div>
+        <div class="stat-label">Total Submitted</div>
+    </div>
+    <div class="stat-card orange">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="stat-value">{{ expenses|selectattr('status','eq','Pending')|list|length }}</div>
+        <div class="stat-label">Awaiting Approval</div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="stat-value">{{ expenses|selectattr('status','eq','Approved')|list|length }}</div>
+        <div class="stat-label">Approved</div>
+    </div>
+    <div class="stat-card red">
+        <div class="stat-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="stat-value">{{ expenses|selectattr('status','eq','Rejected')|list|length }}</div>
+        <div class="stat-label">Rejected</div>
+    </div>
+</div>
+
+<!-- Recent Expenses -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">My recent expenses</div>
+        <a href="{{ url_for('submit_expense') }}" class="btn btn-primary btn-sm">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Submit new
+        </a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Approver</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exp in expenses|sort(attribute='date', reverse=True) %}
+                <tr>
+                    <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        {{ exp.description or 'No description' }}
+                    </td>
+                    <td>
+                        <span style="background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:6px;font-size:12px;">{{ exp.category }}</span>
+                    </td>
+                    <td class="text-muted text-sm">{{ exp.date.strftime('%d %b %Y') }}</td>
+                    <td>
+                        <div>
+                            <span style="font-family:'Syne',sans-serif;font-weight:600;">{{ exp.amount }} {{ exp.currency }}</span>
+                            {% if exp.currency != exp.base_amount %}
+                            <div class="text-muted" style="font-size:11px;">≈ {{ exp.base_amount }} base</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge {{ exp.status|lower }}">{{ exp.status }}</span>
+                    </td>
+                    <td>
+                        <!-- Approval timeline -->
+                        <div style="display:flex;gap:4px;align-items:center;">
+                            {% for step in exp.approval_steps %}
+                            <div title="{{ step.approver.name }}: {{ step.status }}"
+                                 style="width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;
+                                 {% if step.status=='Approved' %}background:rgba(34,197,94,0.2);color:var(--green);border:1px solid var(--green);
+                                 {% elif step.status=='Rejected' %}background:rgba(239,68,68,0.2);color:var(--red);border:1px solid var(--red);
+                                 {% else %}background:var(--surface2);color:var(--muted);border:1px solid var(--border);{% endif %}">
+                                {{ step.step_order }}
+                            </div>
+                            {% endfor %}
+                            {% if not exp.approval_steps %}
+                            <span class="text-muted" style="font-size:12px;">—</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            <p>No expenses yet. <a href="{{ url_for('submit_expense') }}" style="color:var(--accent);">Submit your first one</a></p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
