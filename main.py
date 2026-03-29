@@ -40,6 +40,37 @@ class User(db.Model):
     expenses = db.relationship('Expense', backref='employee', lazy=True)
 
 
+
+@app.route('/')
+def index():
+    """Root route redirects to login or dashboard based on session."""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            session['role'] = user.role
+            session['company_id'] = user.company_id
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid email or password', 'error')
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
