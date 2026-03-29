@@ -36,7 +36,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False) # Admin, Manager, Employee
     manager_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     is_manager_approver = db.Column(db.Boolean, default=True) 
-
+    manager = db.relationship('User', remote_side=[id], backref='team_members')
     expenses = db.relationship('Expense', backref='employee', lazy=True)
 
 class Expense(db.Model):
@@ -433,19 +433,34 @@ def pending_approvals():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # We use .join(Expense) to make sure the expense data is loaded 
-    # and ready for the HTML table
+    # Get the current logged-in user
+    current_user = User.query.get(session.get('user_id'))
+    
+    # 1. Get Pending Approvals (with Expense data joined for the table)
     pending = ApprovalStep.query.join(Expense).filter(
-        ApprovalStep.approver_id == session.get('user_id'),
+        ApprovalStep.approver_id == current_user.id,
         ApprovalStep.status == 'Pending'
     ).all()
     
-    # We also need to pass 'user' so the sidebar and name show up correctly
-    current_user = User.query.get(session.get('user_id'))
+    # 2. Calculate Total Approved (counts how many steps this manager has approved)
+    approved_count = ApprovalStep.query.filter_by(
+        approver_id=current_user.id, 
+        status='Approved'
+    ).count()
     
-    return render_template('dashboard_manager.html', 
-                           pending_approvals=pending, 
-                           user=current_user)
+    # 3. Calculate Team Members (counts how many users have this manager's ID)
+    team_count = User.query.filter_by(
+        manager_id=current_user.id
+    ).count()
+    
+# 4. Pass all the data to the template
+    return render_template(
+        'dashboard_manager.html', 
+        pending_approvals=pending, 
+        user=current_user,
+        approved_today=approved_count,
+        team_count=team_count   # <--- Change this line from team_members to team_count
+    )
 
 @app.route('/team_expenses')
 def team_expenses():
