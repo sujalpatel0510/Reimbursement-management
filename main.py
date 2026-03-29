@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 # --- 1. App Initialization & Configuration ---
 app = Flask(__name__)
@@ -14,7 +15,10 @@ app.secret_key = 'replace_this_with_a_super_secret_key_for_production' # Needed 
 # Replace with your actual PostgreSQL credentials
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:8511@localhost:5432/reimbursement_db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
+# Create an upload folder configuration
+UPLOAD_FOLDER = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True) # This creates the folder if it doesn't exist
 db = SQLAlchemy(app)
 
 # --- 2. Database Models ---
@@ -327,7 +331,6 @@ def delete_user(user_id):
 
 @app.route('/submit_expense', methods=['GET', 'POST'])
 def submit_expense():
-    """Employee can submit expense claims"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
@@ -335,13 +338,25 @@ def submit_expense():
     
     if request.method == 'POST':
         amount = float(request.form.get('amount'))
-        currency = request.form.get('currency')
+        currency = request.form.get('currency', user.company.default_currency)
+        base_amount = amount # (Update this if you have currency conversion logic)
         category = request.form.get('category')
         description = request.form.get('description')
         date_str = request.form.get('date')
         
-        company = Company.query.get(user.company_id)
-        base_amount = convert_currency(amount, currency, company.default_currency)
+        # --- NEW: File Upload Logic ---
+        receipt_url = None
+        if 'receipt' in request.files:
+            file = request.files['receipt']
+            if file and file.filename != '':
+                # Secure the filename to prevent hacking (e.g., changing spaces to underscores)
+                filename = secure_filename(file.filename)
+                # Save it to static/uploads/filename.jpg
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                # Store the URL path in the database so the HTML can display it later
+                receipt_url = f"/{filepath}"
+        # ------------------------------
         
         new_expense = Expense(
             user_id=user.id,
@@ -350,22 +365,24 @@ def submit_expense():
             base_amount=base_amount,
             category=category,
             description=description,
-            date=datetime.strptime(date_str, '%Y-%m-%d').date()
+            date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+            receipt_url=receipt_url  # <-- Add the image URL to the database
         )
         db.session.add(new_expense)
-        db.session.flush()
+        db.session.flush() # Generates the expense ID
         
-        if user.manager_id and user.is_manager_approver:
+        if user.manager_id:
             step1 = ApprovalStep(
                 expense_id=new_expense.id, 
                 approver_id=user.manager_id, 
-                step_order=1
+                step_order=1,
+                status='Pending'
             )
             db.session.add(step1)
             
         db.session.commit()
         flash('Expense submitted successfully!', 'success')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('dashboard')) # Or redirect to my_expenses
         
     return render_template('submit_expense.html', user=user)
 

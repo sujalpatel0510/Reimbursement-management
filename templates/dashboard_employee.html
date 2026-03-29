@@ -71,6 +71,7 @@
                     <th>Amount</th>
                     <th>Status</th>
                     <th>Approver</th>
+                    <th>Receipt</th>
                 </tr>
             </thead>
             <tbody>
@@ -109,9 +110,17 @@
                             {% if not exp.approval_steps %}
                             <span class="text-muted" style="font-size:12px;">—</span>
                             {% endif %}
-                        </div>
+</div>
                     </td>
-                </tr>
+                    
+                    <td>
+                        {% if exp.receipt_url %}
+                            <a href="{{ exp.receipt_url }}" target="_blank" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 4px 8px;">View</a>
+                        {% else %}
+                            <span class="text-muted" style="font-size: 11px;">—</span>
+                        {% endif %}
+                    </td>
+                    </tr>
                 {% else %}
                 <tr>
                     <td colspan="6">
