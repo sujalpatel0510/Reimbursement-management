@@ -45,10 +45,8 @@
             left: 0; top: 0;
             z-index: 100;
         }
-        .sidebar-logo { padding: 28px 24px 20px; border-bottom: 1px solid var(--border); }
-        .sidebar-logo .wordmark { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; color: var(--accent); }
-        .sidebar-logo .tagline  { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
-
+        .sidebar-logo { padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: center; align-items: center; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+        .expenseflow-graphic-logo { max-width: 100%; height: auto; max-height: 80px; object-fit: contain; flex-shrink: 0; }
         .sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
         .nav-section-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 1.2px; text-transform: uppercase; padding: 12px 12px 6px; }
         .nav-link {
@@ -204,9 +202,9 @@
 {% if 'user_id' in session %}
 <aside class="sidebar">
     <div class="sidebar-logo">
-        <div class="wordmark">ExpenseFlow</div>
-        <div class="tagline">Reimbursement Mgmt</div>
-    </div>
+            <img src="{{ url_for('static', filename='images/expenseflow_logo.png') }}" alt="ExpenseFlow Logo" class="expenseflow-graphic-logo">
+        </div>
+        
     <nav class="sidebar-nav">
         {% if session.get('role') == 'Admin' %}
         <div class="nav-section-label">Admin</div>
